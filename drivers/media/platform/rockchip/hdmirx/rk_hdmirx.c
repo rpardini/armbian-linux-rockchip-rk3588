@@ -266,8 +266,30 @@ static void hdmirx_audio_interrupts_setup(struct rk_hdmirx_dev *hdmirx_dev, bool
 static int hdmirx_set_cpu_limit_freq(struct rk_hdmirx_dev *hdmirx_dev);
 static void hdmirx_cancel_cpu_limit_freq(struct rk_hdmirx_dev *hdmirx_dev);
 static void hdmirx_plugout(struct rk_hdmirx_dev *hdmirx_dev);
+//fox.luo@2023.03.25 add hdmirx plug det
+static int screen_width = 0, screen_height =0;
+static int hdmirx_check_flag=0;
+static int audio_fs=0;
 
 static u8 edid_init_data_340M[] = {
+#if 0  //test add 1280*1024
+	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 
+	0x49, 0x70, 0x88, 0x35, 0x01, 0x00, 0x00, 0x00, 
+	0x2D, 0x1F, 0x01, 0x03, 0x80, 0x78, 0x44, 0x78, 
+	0x0A, 0xCF, 0x74, 0xA3, 0x57, 0x4C, 0xB0, 0x23, 
+	0x09, 0x48, 0x4C, 0x21, 0x08, 0x00, 0x61, 0x40, 
+	0x81, 0x80, 0x81, 0x00, 0x95, 0x00, 0xA9, 0xC0, 
+	0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x30, 0x2A, 
+	0x00, 0x98, 0x51, 0x00, 0x2A, 0x40, 0x30, 0x70, 
+	0x13, 0x00, 0x20, 0xC2, 0x31, 0x00, 0x00, 0x1E,
+	0x01, 0x1D, 0x00, 0x72, 0x51, 0xD0, 0x1E, 0x20, 
+	0x6E, 0x28, 0x55, 0x00, 0x20, 0xC2, 0x31, 0x00, 
+	0x00, 0x1E, 0x00, 0x00, 0x00, 0xFC, 0x00, 0x48, 
+	0x47, 0x53, 0x2D, 0x55, 0x48, 0x44, 0x0A, 0x20, 
+	0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0xFD, 
+	0x00, 0x3B, 0x46, 0x1F, 0x8C, 0x3C, 0x00, 0x0A, 
+	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x01, 0xD6,
+#else
 	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00,
 	0x49, 0x70, 0x88, 0x35, 0x01, 0x00, 0x00, 0x00,
 	0x2D, 0x1F, 0x01, 0x03, 0x80, 0x78, 0x44, 0x78,
@@ -284,6 +306,7 @@ static u8 edid_init_data_340M[] = {
 	0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0xFD,
 	0x00, 0x3B, 0x46, 0x1F, 0x8C, 0x3C, 0x00, 0x0A,
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x01, 0xA7,
+#endif	
 
 	0x02, 0x03, 0x2E, 0xF1, 0x51, 0x07, 0x16, 0x14,
 	0x05, 0x01, 0x03, 0x12, 0x13, 0x84, 0x22, 0x1F,
@@ -1350,7 +1373,9 @@ static void hdmirx_phy_config(struct rk_hdmirx_dev *hdmirx_dev)
 		dev_err(dev, "%s wait pddq ack failed!\n", __func__);
 
 	hdmirx_update_bits(hdmirx_dev, PHY_CONFIG, HDMI_DISABLE, 0);
-	wait_reg_bit_status(hdmirx_dev, PHY_STATUS, HDMI_DISABLE_ACK, 0, false, 50);
+	if (wait_reg_bit_status(hdmirx_dev, PHY_STATUS, HDMI_DISABLE_ACK, 0,
+				false, 50))
+		dev_err(dev, "%s wait hdmi disable ack failed!\n", __func__);
 
 	hdmirx_tmds_clk_ratio_config(hdmirx_dev);
 }
@@ -1487,7 +1512,7 @@ static int hdmirx_wait_lock_and_get_timing(struct rk_hdmirx_dev *hdmirx_dev)
 			break;
 
 		if (!tx_5v_power_present(hdmirx_dev)) {
-			//v4l2_err(v4l2_dev, "%s HDMI pull out, return!\n", __func__);
+			v4l2_err(v4l2_dev, "%s HDMI pull out, return!\n", __func__);
 			return -1;
 		}
 
@@ -1495,10 +1520,10 @@ static int hdmirx_wait_lock_and_get_timing(struct rk_hdmirx_dev *hdmirx_dev)
 	}
 
 	if (i == WAIT_SIGNAL_LOCK_TIME) {
-		v4l2_err(v4l2_dev, "%s signal not lock, tmds_clk_ratio:%d\n",
-				__func__, hdmirx_dev->tmds_clk_ratio);
-		v4l2_err(v4l2_dev, "%s mu_st:%#x, scdc_st:%#x, dma_st10:%#x\n",
-				__func__, mu_status, scdc_status, dma_st10);
+		//v4l2_err(v4l2_dev, "%s signal not lock, tmds_clk_ratio:%d\n",
+		//		__func__, hdmirx_dev->tmds_clk_ratio);
+		//v4l2_err(v4l2_dev, "%s mu_st:%#x, scdc_st:%#x, dma_st10:%#x\n",
+		//		__func__, mu_status, scdc_status, dma_st10);
 
 		return -1;
 	}
@@ -1530,6 +1555,10 @@ static int hdmirx_wait_lock_and_get_timing(struct rk_hdmirx_dev *hdmirx_dev)
 	usleep_range(200*1000, 200*1010);
 	hdmirx_format_change(hdmirx_dev);
 
+	//lyh@2023.03.25 add hdmirx plug det
+	hdmirx_check_flag=1;
+	screen_width =hdmirx_dev->timings.bt.width;
+	screen_height =hdmirx_dev->timings.bt.height;
 	return 0;
 }
 
@@ -2842,6 +2871,9 @@ static void hdmirx_plugout(struct rk_hdmirx_dev *hdmirx_dev)
 	flush_work(&hdmirx_dev->work_wdt_config);
 	sip_wdt_config(WDT_STOP, 0, 0, 0);
 	rockchip_clear_system_status(SYS_STATUS_HDMIRX);
+	
+	//fox.luo@2022.04.25 add hdmirx plug det			
+	hdmirx_check_flag = 0;
 }
 
 static void hdmirx_delayed_work_hotplug(struct work_struct *work)
@@ -2982,6 +3014,8 @@ static void hdmirx_audio_setup(struct rk_hdmirx_dev *hdmirx_dev)
 	as->fifo_int = false;
 	as->audio_enabled = false;
 	hdmirx_audio_set_fs(hdmirx_dev, 44100);
+	//hdmirx_audio_set_fs(hdmirx_dev, 0);
+	
 	/* Disable audio domain */
 	hdmirx_update_bits(hdmirx_dev, GLOBAL_SWENABLE, AUDIO_ENABLE, 0);
 	/* Configure Vsync interrupt threshold */
@@ -3010,8 +3044,8 @@ static int hdmirx_audio_startup(struct device *dev, void *data)
 
 	if (tx_5v_power_present(hdmirx_dev) && hdmirx_dev->audio_present)
 		return 0;
-	dev_dbg(dev, "%s: device is no connected or audio is off\n", __func__);
-	return 0;
+	dev_err(dev, "%s: device is no connected or audio is off\n", __func__);
+	return -ENODEV;
 }
 
 static void hdmirx_audio_shutdown(struct device *dev, void *data)
@@ -3184,6 +3218,7 @@ static void hdmirx_delayed_work_audio(struct work_struct *work)
 			dev_info(hdmirx_dev->dev, "audio on");
 			hdmirx_audio_handle_plugged_change(hdmirx_dev, 1);
 			hdmirx_dev->audio_present = true;
+			audio_fs=fs_audio;
 		}
 		if (cur_state - init_state > 16 && cur_state - pre_state > 0)
 			hdmirx_audio_clk_ppm_inc(hdmirx_dev, 10);
@@ -3194,6 +3229,7 @@ static void hdmirx_delayed_work_audio(struct work_struct *work)
 			dev_info(hdmirx_dev->dev, "audio off");
 			hdmirx_audio_handle_plugged_change(hdmirx_dev, 0);
 			hdmirx_dev->audio_present = false;
+			audio_fs=fs_audio;
 		}
 	}
 	as->pre_state = cur_state;
@@ -3276,6 +3312,38 @@ static irqreturn_t hdmirx_5v_det_irq_handler(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
+
+//fox.luo@2022.04.25 add hdmirx plug det
+static ssize_t plug_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	if(hdmirx_check_flag == 1)
+		return sprintf(buf, "%d,%dx%d,%d\n", 1,screen_width,screen_height,audio_fs);
+	else
+		return sprintf(buf, "%d,%dx%d,%d\n",0,0,0,0);
+}
+
+static ssize_t plug_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int var;
+	int ret;
+
+	ret = sscanf(buf, "%du", &var);
+	if (ret < 0)
+		return ret;
+
+	return count;
+}
+
+static struct kobj_attribute plug_attribute = __ATTR_RW(plug);
+
+static struct attribute *modem_sysfs[] = {
+	&plug_attribute.attr,
+	NULL,
+};
+
+static struct attribute_group modem_attr_group = {
+	.attrs = modem_sysfs,
+};
 
 static const struct hdmirx_cec_ops hdmirx_cec_ops = {
 	.write = hdmirx_writel,
@@ -4317,6 +4385,8 @@ static int hdmirx_probe(struct platform_device *pdev)
 	hdmirx_register_hdcp(dev, hdmirx_dev, hdmirx_dev->hdcp_enable);
 
 	hdmirx_register_debugfs(hdmirx_dev->dev, hdmirx_dev);
+	//fox.luo@2022.04.25 add hdmi plug
+	ret = sysfs_create_group(kobject_create_and_add("hdmi_buildin", NULL), &modem_attr_group);
 
 	hdmirx_dev->initialized = true;
 	dev_info(dev, "%s driver probe ok!\n", dev_name(dev));
