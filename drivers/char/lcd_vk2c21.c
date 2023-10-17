@@ -68,7 +68,7 @@ static int gpio_i2c_scl, gpio_i2c_sda;
 */
 #include "lcd_vk2c21.h"
 
-#define VK2c21_CLK 50		//SCL信号线频率,由delay_nus实现 50->10kHz 10->50kHz 5->100kHz
+#define VK2c21_CLK 200		//SCL信号线频率,由delay_nus实现 50->10kHz 10->50kHz 5->100kHz
 //驱动seg数
 //4com 
 //VK2C21A/B/C/D
