@@ -129,6 +129,26 @@
 		rockchip,jack-det;
 	};
 
+	hdmi1earc_dc: hdmi1earc-dc {
+		compatible = "rockchip,dummy-codec";
+		#sound-dai-cells = <0>;
+	};
+
+	hdmi1earc_sound: hdmi1earc-sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,name = "rockchip-hdmi1earc";
+		simple-audio-card,bitclock-master = <&dailink0_master>;
+		simple-audio-card,frame-master = <&dailink0_master>;
+		status = "okay";
+		simple-audio-card,cpu {
+			sound-dai = <&i2s10_8ch>;
+		};
+		dailink0_master: simple-audio-card,codec {
+			sound-dai = <&hdmi1earc_dc>;
+		};
+	};
+
 	vcc5v0_host_30: vcc5v0-host-30 {
 		compatible = "regulator-fixed";
 		enable-active-high;
@@ -413,6 +433,11 @@
 };
 
 &i2s7_8ch {
+	status = "okay";
+};
+
+// eARC on HDMI1
+&i2s10_8ch {
 	status = "okay";
 };
 
