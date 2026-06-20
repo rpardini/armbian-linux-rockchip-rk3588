@@ -56,12 +56,16 @@ void __init time_init(void)
 {
 	u32 arch_timer_rate;
 
+	pr_emerg("RKDBG> time_init: enter\n");
 	of_clk_init(NULL);
+	pr_emerg("RKDBG> time_init: of_clk_init done\n");
 	timer_probe();
+	pr_emerg("RKDBG> time_init: timer_probe done\n");
 
 	tick_setup_hrtimer_broadcast();
 
 	arch_timer_rate = arch_timer_get_rate();
+	pr_emerg("RKDBG> time_init: arch_timer_rate=%u\n", arch_timer_rate);
 	if (!arch_timer_rate)
 		panic("Unable to initialise architected timer.\n");
 

@@ -1062,9 +1062,13 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	rcu_init_nohz();
 	init_timers();
 	srcu_init();
+	pr_emerg("RKDBG> after srcu_init\n");
 	hrtimers_init();
+	pr_emerg("RKDBG> after hrtimers_init\n");
 	softirq_init();
+	pr_emerg("RKDBG> after softirq_init\n");
 	timekeeping_init();
+	pr_emerg("RKDBG> after timekeeping_init -> calling time_init\n");
 	time_init();
 
 	/* This must be after timekeeping is initialized */
