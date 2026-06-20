@@ -5436,8 +5436,15 @@ void __init of_clk_init(const struct of_device_id *matches)
 				of_node_set_flag(clk_provider->np,
 						 OF_POPULATED);
 
+				pr_emerg("RKDBG> of_clk_init: node=%pOF init=%pS\n",
+					 clk_provider->np,
+					 clk_provider->clk_init_cb);
 				clk_provider->clk_init_cb(clk_provider->np);
+				pr_emerg("RKDBG> of_clk_init: node=%pOF init_cb returned\n",
+					 clk_provider->np);
 				of_clk_set_defaults(clk_provider->np, true);
+				pr_emerg("RKDBG> of_clk_init: node=%pOF defaults done\n",
+					 clk_provider->np);
 
 				list_del(&clk_provider->node);
 				of_node_put(clk_provider->np);
