@@ -126,6 +126,11 @@ struct fusb302_chip {
  * Logging
  */
 
+/* DEBUG (Armbian, DO NOT UPSTREAM): mirror the debugfs log to the console */
+static bool console_log = true;
+module_param(console_log, bool, 0644);
+MODULE_PARM_DESC(console_log, "Mirror the fusb302 debugfs log to the kernel log");
+
 #ifdef CONFIG_DEBUG_FS
 static bool fusb302_log_full(struct fusb302_chip *chip)
 {
@@ -149,6 +154,9 @@ static void _fusb302_log(struct fusb302_chip *chip, const char *fmt,
 	}
 
 	vsnprintf(tmpbuffer, sizeof(tmpbuffer), fmt, args);
+
+	if (console_log)
+		dev_info(chip->dev, "fusb302: %s\n", tmpbuffer);
 
 	mutex_lock(&chip->logbuffer_lock);
 
@@ -228,8 +236,22 @@ static void fusb302_debugfs_exit(struct fusb302_chip *chip)
 
 #else
 
+__printf(2, 3)
 static void fusb302_log(const struct fusb302_chip *chip,
-			const char *fmt, ...) { }
+			const char *fmt, ...)
+{
+	struct va_format vaf;
+	va_list args;
+
+	if (!console_log)
+		return;
+
+	va_start(args, fmt);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	dev_info(chip->dev, "fusb302: %pV\n", &vaf);
+	va_end(args);
+}
 static void fusb302_debugfs_init(const struct fusb302_chip *chip) { }
 static void fusb302_debugfs_exit(const struct fusb302_chip *chip) { }
 
@@ -333,6 +355,66 @@ static int fusb302_i2c_clear_bits(struct fusb302_chip *chip, u8 address,
 	return fusb302_i2c_mask_write(chip, address, clear_bits, 0x00);
 }
 
+/*
+ * DEBUG (Armbian, DO NOT UPSTREAM): show what the bootloader left behind
+ * before the sw reset wipes it: register state, and any PD message the
+ * partner sent (and the chip auto-acked) that nobody processed.
+ */
+static void fusb302_dump_stale_state(struct fusb302_chip *chip)
+{
+	static const u8 regs[] = {
+		FUSB_REG_SWITCHES0, FUSB_REG_SWITCHES1, FUSB_REG_CONTROL0,
+		FUSB_REG_CONTROL2, FUSB_REG_CONTROL3, FUSB_REG_MASK,
+		FUSB_REG_POWER, FUSB_REG_MASKA, FUSB_REG_MASKB,
+		FUSB_REG_STATUS0A, FUSB_REG_STATUS1A, FUSB_REG_INTERRUPTA,
+		FUSB_REG_INTERRUPTB, FUSB_REG_STATUS0, FUSB_REG_STATUS1,
+		FUSB_REG_INTERRUPT,
+	};
+	__le32 payload[PD_MAX_PAYLOAD];
+	u8 data, token, crc[4];
+	unsigned int i, n, cnt;
+	__le16 hdr_le;
+	char buf[160];
+	int len = 0;
+	u16 hdr;
+
+	for (i = 0; i < ARRAY_SIZE(regs); i++) {
+		if (fusb302_i2c_read(chip, regs[i], &data) < 0)
+			return;
+		len += scnprintf(buf + len, sizeof(buf) - len, " %02x=%02x",
+				 regs[i], data);
+	}
+	dev_info(chip->dev, "pre-reset regs:%s\n", buf);
+
+	for (n = 0; n < 8; n++) {
+		if (fusb302_i2c_read(chip, FUSB_REG_STATUS1, &data) < 0)
+			return;
+		if (data & FUSB_REG_STATUS1_RX_EMPTY)
+			break;
+		if (fusb302_i2c_read(chip, FUSB_REG_FIFOS, &token) < 0 ||
+		    fusb302_i2c_block_read(chip, FUSB_REG_FIFOS, 2,
+					   (u8 *)&hdr_le) < 0)
+			return;
+		hdr = le16_to_cpu(hdr_le);
+		cnt = pd_header_cnt(hdr);
+		if (cnt && fusb302_i2c_block_read(chip, FUSB_REG_FIFOS, cnt * 4,
+						  (u8 *)payload) < 0)
+			return;
+		if (fusb302_i2c_block_read(chip, FUSB_REG_FIFOS, 4, crc) < 0)
+			return;
+		len = 0;
+		for (i = 0; i < cnt; i++)
+			len += scnprintf(buf + len, sizeof(buf) - len, " %08x",
+					 le32_to_cpu(payload[i]));
+		buf[len] = '\0';
+		dev_info(chip->dev,
+			 "pre-reset stale RX msg %u: sop=%02x hdr=%04x %s type=%u id=%u rev=%u%s\n",
+			 n, token, hdr, cnt ? "DATA" : "CTRL", pd_header_type(hdr),
+			 pd_header_msgid(hdr), pd_header_rev(hdr) + 1, buf);
+	}
+	dev_info(chip->dev, "pre-reset stale RX FIFO: %u message(s)\n", n);
+}
+
 static int fusb302_sw_reset(struct fusb302_chip *chip)
 {
 	int ret = 0;
@@ -406,6 +488,9 @@ static int tcpm_init(struct tcpc_dev *dev)
 						 tcpc_dev);
 	int ret = 0;
 	u8 data;
+
+	if (console_log)
+		fusb302_dump_stale_state(chip);
 
 	ret = fusb302_sw_reset(chip);
 	if (ret < 0)

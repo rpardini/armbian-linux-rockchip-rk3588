@@ -587,6 +587,11 @@ static bool tcpm_port_is_disconnected(struct tcpm_port *port)
  * Logging
  */
 
+/* DEBUG (Armbian, DO NOT UPSTREAM): mirror the debugfs log to the console */
+static bool console_log = true;
+module_param(console_log, bool, 0644);
+MODULE_PARM_DESC(console_log, "Mirror the tcpm debugfs log to the kernel log");
+
 #ifdef CONFIG_DEBUG_FS
 
 static bool tcpm_log_full(struct tcpm_port *port)
@@ -613,6 +618,9 @@ static void _tcpm_log(struct tcpm_port *port, const char *fmt, va_list args)
 	}
 
 	vsnprintf(tmpbuffer, sizeof(tmpbuffer), fmt, args);
+
+	if (console_log)
+		dev_info(port->dev, "tcpm: %s\n", tmpbuffer);
 
 	if (tcpm_log_full(port)) {
 		port->logbuffer_head = max(port->logbuffer_head - 1, 0);
@@ -776,10 +784,42 @@ static void tcpm_debugfs_exit(struct tcpm_port *port)
 
 #else
 
+__printf(2, 0)
+static void _tcpm_log(const struct tcpm_port *port, const char *fmt,
+		      va_list args)
+{
+	struct va_format vaf;
+	va_list aq;
+
+	if (!console_log)
+		return;
+
+	va_copy(aq, args);
+	vaf.fmt = fmt;
+	vaf.va = &aq;
+	dev_info(port->dev, "tcpm: %pV\n", &vaf);
+	va_end(aq);
+}
+
 __printf(2, 3)
-static void tcpm_log(const struct tcpm_port *port, const char *fmt, ...) { }
+static void tcpm_log(const struct tcpm_port *port, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	_tcpm_log(port, fmt, args);
+	va_end(args);
+}
+
 __printf(2, 3)
-static void tcpm_log_force(struct tcpm_port *port, const char *fmt, ...) { }
+static void tcpm_log_force(struct tcpm_port *port, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	_tcpm_log(port, fmt, args);
+	va_end(args);
+}
 static void tcpm_log_source_caps(struct tcpm_port *port) { }
 static void tcpm_debugfs_init(const struct tcpm_port *port) { }
 static void tcpm_debugfs_exit(const struct tcpm_port *port) { }
