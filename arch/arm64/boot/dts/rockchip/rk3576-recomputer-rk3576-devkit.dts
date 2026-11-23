@@ -34,7 +34,22 @@
 		volumeup-key {
 			linux,code = <KEY_VOLUMEUP>;
 			label = "volume up";
-			press-threshold-microvolt = <1750000>;
+			press-threshold-microvolt = <0>;
+		};
+	};
+
+	adc-keys-maskrom {
+		compatible = "adc-keys";
+		io-channels = <&saradc 0>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <728000>;
+		poll-interval = <100>;
+		status = "okay";
+
+		maskrom-key {
+			linux,code = <KEY_SETUP>;
+			label = "maskrom";
+			press-threshold-microvolt = <0>;
 		};
 	};
 
